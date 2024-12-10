@@ -23,6 +23,7 @@
     ".eslintrc": "json",
     "*.vue": "html",
     "*.world": "xml",
+    "*.info": "xml",
     "regex": "cpp",
     "unordered_map": "cpp",
     "unordered_set": "cpp",
@@ -102,7 +103,8 @@
     "future": "cpp",
     "core": "cpp",
     "specialfunctions": "cpp",
-    "dense": "cpp"
+    "dense": "cpp",
+    "shared_mutex": "cpp"
   },
   "C_Cpp_Runner.msvcBatchPath": "",
   "C_Cpp_Runner.cCompilerPath": "gcc",
