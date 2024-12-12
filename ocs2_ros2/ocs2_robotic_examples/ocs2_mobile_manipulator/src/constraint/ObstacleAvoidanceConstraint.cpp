@@ -33,122 +33,72 @@ ObstacleAvoidanceConstraint::ObstacleAvoidanceConstraint(const ObstacleAvoidance
     mappingPtr_(rhs.mappingPtr_->clone()) {}
 
 vector_t ObstacleAvoidanceConstraint::getValue(scalar_t time, const vector_t& state, const PreComputation& preComputation) const{
-    //get the state of the robot
-    //std::cout << "state size: " << state.size() << std::endl;
+    auto start_total = std::chrono::high_resolution_clock::now();
+    
+    if (isCacheValid(time, state)) {
+        std::lock_guard<std::mutex> lock(cache_mutex_);
+        return cached_constraint_value_;
+    }
 
     const auto& preComp = cast<MobileManipulatorPreComputation>(preComputation);
     const auto& pinocchioInterface_ = preComp.getPinocchioInterface();
     
     auto* mutableThis = const_cast<ObstacleAvoidanceConstraint*>(this);
-    //get the value of the esdf
-    return mutableThis->getEsdfConstraintValue(pinocchioInterface_, pinocchioSphereInterface_, esdfClientInterface_).first;
-    //return vector_t::Zero(getNumConstraints(time));
+    
+    auto result = mutableThis->getEsdfConstraintValue(pinocchioInterface_, pinocchioSphereInterface_, esdfClientInterface_);
+    
+    auto end_total = std::chrono::high_resolution_clock::now();
+    auto duration_total = std::chrono::duration_cast<std::chrono::microseconds>(end_total - start_total);
+    RCLCPP_INFO(rclcpp::get_logger("ObstacleAvoidanceConstraint"), "Total getValue time: %ld microseconds", duration_total.count());
+    
+    updateCache(time, state, result.first, result.second);
+    return result.first;
 }
 
-std::pair<vector_t, std::vector<Eigen::Vector3d>> ObstacleAvoidanceConstraint::getEsdfConstraintValue(const PinocchioInterface &pinocchioInterface, const PinocchioSphereInterface &pinocchioSphereInterface, 
-                                                                EsdfClientInterface &esdfClientInterface){
-    // Get the world coordinates of the 7 robot arm links
-    const auto& model = pinocchioInterface.getModel();
-    const auto& data = pinocchioInterface.getData();
+std::pair<vector_t, std::vector<Eigen::Vector3d>> ObstacleAvoidanceConstraint::getEsdfConstraintValue(
+    const PinocchioInterface &pinocchioInterface, 
+    const PinocchioSphereInterface &pinocchioSphereInterface,
+    EsdfClientInterface &esdfClientInterface) {
     
-    // Create vector to store link positions
-    std::vector<Eigen::Vector3d> linkPositions;
-    linkPositions.reserve(7);
+    auto start_spheres = std::chrono::high_resolution_clock::now();
     
-    // Loop through the 7 joints to get their world positions
-    for(size_t i = 1; i <= 7; ++i) {
-        // Get the transformation matrix for each joint
-        const auto& transform = data.oMi[i];
-        // Extract the translation part (world position)
-        Eigen::Vector3d position = transform.translation();
-        linkPositions.push_back(position);
-        //std::cout << "Link position: " << position.transpose() << std::endl;
-        }
-    // get the sphere centers
     const auto& sphereCenters = pinocchioSphereInterface.computeSphereCentersInWorldFrame(pinocchioInterface);
-
     std::vector<Eigen::Vector3d> adjustedSphereCenters = sphereCenters;
-
-    // SphereCenters are relative to the robot base frame, so we need to convert them to the world frame using the link positions
-    for (size_t i = 0; i < adjustedSphereCenters.size(); ++i) {
-        adjustedSphereCenters[i] = linkPositions[i] + sphereCenters[i];
-        //std::cout << "Adjusted sphere center: " << adjustedSphereCenters[i].transpose() << std::endl;
-    }
-
-    // get the sphere radiis
     const auto& sphereRadii = pinocchioSphereInterface.getSphereRadii();
-
-    // RCLCPP_INFO(this->get_logger(), "sphereRadii size: %zu", sphereRadii.size());
     
-    // for (const auto& radius : sphereRadii) {
-    //     std::cout << "sphere radius: " << radius << std::endl;
-    // }
+    auto end_spheres = std::chrono::high_resolution_clock::now();
+    auto duration_spheres = std::chrono::duration_cast<std::chrono::microseconds>(end_spheres - start_spheres);
+    //RCLCPP_INFO(rclcpp::get_logger("ObstacleAvoidanceConstraint"), "Sphere computation time: %ld microseconds", duration_spheres.count());
+
+    auto start_esdf = std::chrono::high_resolution_clock::now();
+    // Convert time_point to duration since epoch and print
+    //std::cout << "start_esdf: " << std::chrono::duration_cast<std::chrono::microseconds>(start_esdf.time_since_epoch()).count() << " microseconds" << std::endl;
 
     std::vector<float> esdfValue;
     std::vector<Eigen::Vector3d> gradients;
-
-    // //call the esdf client to get the esdf value
-    // for (size_t i = 0; i < adjustedSphereCenters.size(); ++i) {
-    //     const auto& esdf = esdfClientInterface.getEsdf(adjustedSphereCenters[i]);
-    //     // esdf: 1D vector, size = number of voxels in the aabb
-    //     esdfValue[i] = esdf[0];
-    // }
     EsdfClientInterface::EsdfResponse esdfResponse = esdfClientInterface.getEsdf(adjustedSphereCenters);
     esdfValue = esdfResponse.esdf_values;
     gradients = esdfResponse.gradients;
+    
+    auto end_esdf = std::chrono::high_resolution_clock::now();
+    //std::cout << "end_esdf: " << std::chrono::duration_cast<std::chrono::microseconds>(end_esdf.time_since_epoch()).count() << " microseconds" << std::endl;
+    
+    auto duration_esdf = std::chrono::duration_cast<std::chrono::microseconds>(end_esdf - start_esdf);
+    RCLCPP_INFO(rclcpp::get_logger("ObstacleAvoidanceConstraint"), "ESDF query time: %ld microseconds", duration_esdf.count());
 
-    // for (size_t i = 0; i < esdfValue.size(); ++i) {
-    //     std::cout << "ESDF value: " << esdfValue[i] << std::endl;
-    //     std::cout << "Gradient: " << gradients[i].transpose() << std::endl;
-    // }
-
+    auto start_constraint = std::chrono::high_resolution_clock::now();
+    
     vector_t constraintValue = vector_t::Zero(esdfValue.size());
-    // compute the constraint value
     for (size_t i = 0; i < esdfValue.size(); ++i) {
         constraintValue[i] = fabs(esdfValue[i]) - sphereRadii[i];
         if (constraintValue[i] > 1) {
             constraintValue[i] = 1;
         }
     }
-    //std::cout << "constraintValue size: " << constraintValue.size() << std::endl;
-    // for (size_t i = 0; i < constraintValue.size(); ++i) {
-    //     std::cout << "Constraint value: " << constraintValue[i] << std::endl;
-    // }
-
-    // 1. ¼ì²éESDFÖµµÄÁ¬ĞøĞÔ
-    for (size_t i = 0; i < esdfValue.size(); ++i) {
-        if (!std::isfinite(esdfValue[i])) {
-            throw std::runtime_error("ESDF value is not finite at index " + std::to_string(i));
-        }
-    }
-
-    // 2. ¼ì²éÌİ¶ÈµÄÁ¬ĞøĞÔ
-    for (size_t i = 0; i < gradients.size(); ++i) {
-        if (!gradients[i].allFinite()) {
-            throw std::runtime_error("ESDF gradient is not finite at index " + std::to_string(i));
-        }
-        
-        // ¼ì²éÌİ¶È´óĞ¡ÊÇ·ñºÏÀí
-        const double gradientNorm = gradients[i].norm();
-        if (gradientNorm > 1e3) {  // ÉèÖÃÒ»¸öºÏÀíµÄãĞÖµ
-            throw std::runtime_error("ESDF gradient norm too large: " + std::to_string(gradientNorm));
-        }
-    }
-
-    // 3. ¼ì²éÔ¼ÊøÖµµÄÁ¬ĞøĞÔ
-    for (size_t i = 0; i < constraintValue.size(); ++i) {
-        if (!std::isfinite(constraintValue[i])) {
-            throw std::runtime_error("Constraint value is not finite at index " + std::to_string(i));
-        }
-        
-        // ¼ì²éÔ¼ÊøÖµµÄ±ä»¯ÂÊ
-        if (i > 0) {
-            const double constraintChange = std::abs(constraintValue[i] - constraintValue[i-1]);
-            if (constraintChange > 1.0) {  // ÉèÖÃÒ»¸öºÏÀíµÄãĞÖµ
-                throw std::runtime_error("Constraint value changes too rapidly: " + std::to_string(constraintChange));
-            }
-        }
-    }
+    
+    auto end_constraint = std::chrono::high_resolution_clock::now();
+    auto duration_constraint = std::chrono::duration_cast<std::chrono::microseconds>(end_constraint - start_constraint);
+    //RCLCPP_INFO(rclcpp::get_logger("ObstacleAvoidanceConstraint"), "Constraint computation time: %ld microseconds", duration_constraint.count());
 
     return std::make_pair(constraintValue, gradients);
 }
@@ -163,7 +113,7 @@ size_t ObstacleAvoidanceConstraint::getNumConstraints(scalar_t time) const{
 VectorFunctionLinearApproximation ObstacleAvoidanceConstraint::getLinearApproximation(scalar_t time, const vector_t& state,
                                                             const PreComputation& preComputation) const {   
     std::cout << "----------------getLinearApproximation----------------" << std::endl;
-    // 1. »ñÈ¡Ô¤¼ÆËãÊı¾İ
+    // 1. è·å–é¢„è®¡ç®—æ•°æ®
     const auto& preComp = cast<MobileManipulatorPreComputation>(preComputation);
     const auto& pinocchioInterface_ = preComp.getPinocchioInterface();
     mappingPtr_->setPinocchioInterface(pinocchioInterface_);
@@ -171,28 +121,28 @@ VectorFunctionLinearApproximation ObstacleAvoidanceConstraint::getLinearApproxim
     VectorFunctionLinearApproximation constraint;
     matrix_t dfdq, dfdv;
     
-    // 2. ¼ÆËãÔ¼ÊøÖµºÍÌİ¶È
+    // 2. è®¡ç®—çº¦æŸå€¼å’Œæ¢¯åº¦
     auto* mutableThis = const_cast<ObstacleAvoidanceConstraint*>(this);
     auto [constraintValues, gradients] = mutableThis->getEsdfConstraintValue(pinocchioInterface_, 
                                                                            pinocchioSphereInterface_, 
                                                                            esdfClientInterface_);
     constraint.f = constraintValues;
 
-    // 3. ¼ÆËãÑÅ¿É±È¾ØÕó
-    // »ñÈ¡»úÆ÷ÈËµÄÑÅ¿É±È¾ØÕó
+    // 3. è®¡ç®—é›…å¯æ¯”çŸ©é˜µ
+    // è·å–æœºå™¨äººçš„é›…å¯æ¯”çŸ©é˜µ
     const auto& model = pinocchioInterface_.getModel();
     const auto& data = pinocchioInterface_.getData();
     
-    // ÎªÃ¿¸öÇòÌå¼ÆËãÑÅ¿É±È¾ØÕó
+    // ä¸ºæ¯ä¸ªçƒä½“è®¡ç®—é›…å¯æ¯”çŸ©é˜µ
     const auto& spherePositions = pinocchioSphereInterface_.computeSphereCentersInWorldFrame(pinocchioInterface_);
     dfdq.setZero(spherePositions.size(), model.nq);
     
     for (size_t i = 0; i < spherePositions.size(); ++i) {
-        // »ñÈ¡ÇòÌåËùÔÚ¹Ø½ÚµÄÑÅ¿É±È¾ØÕó
+        // è·å–çƒä½“æ‰€åœ¨å…³èŠ‚çš„é›…å¯æ¯”çŸ©é˜µ
         matrix_t sphereJacobian = matrix_t::Zero(6, model.nv);
         pinocchio::getJointJacobian(model, data, i+1, pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED, sphereJacobian);
         
-        // ½«ESDFÌİ???Óë¹Ø½ÚÑÅ¿É±ÈÏà³Ë
+        // å°†ESDFæ¢¯???ä¸å…³èŠ‚é›…å¯æ¯”ç›¸ä¹˜
         dfdq.row(i) = gradients[i].transpose() * sphereJacobian.topRows(3);
     }
 
@@ -201,7 +151,7 @@ VectorFunctionLinearApproximation ObstacleAvoidanceConstraint::getLinearApproxim
         std::cout << "dfdq row " << i << ": " << dfdq.row(i).transpose() << std::endl;
     }
     
-    // 4. Ó³Éäµ½OCS2×´Ì¬¿Õ¼ä
+    // 4. æ˜ å°„åˆ°OCS2çŠ¶æ€ç©ºé—´
     dfdv.setZero(dfdq.rows(), dfdq.cols());
     std::tie(constraint.dfdx, std::ignore) = mappingPtr_->getOcs2Jacobian(state, dfdq, dfdv);
 
@@ -210,17 +160,17 @@ VectorFunctionLinearApproximation ObstacleAvoidanceConstraint::getLinearApproxim
         std::cout << "dfdx row " << i << ": " << constraint.dfdx.row(i).transpose() << std::endl;
     }
     
-    // ¼ì²éÑÅ¿É±È¾ØÕóµÄÊıÖµÎÈ¶¨ĞÔ
+    // æ£€æŸ¥é›…å¯æ¯”çŸ©é˜µçš„æ•°å€¼ç¨³å®šæ€§
     for (size_t i = 0; i < spherePositions.size(); ++i) {
         matrix_t sphereJacobian = matrix_t::Zero(6, model.nv);
         pinocchio::getJointJacobian(model, data, i+1, pinocchio::ReferenceFrame::LOCAL_WORLD_ALIGNED, sphereJacobian);
         
-        // ¼ì²éÑÅ¿É±È¾ØÕóµÄÌõ¼şÊı
+        // æ£€æŸ¥é›…å¯æ¯”çŸ©é˜µçš„æ¡ä»¶æ•°
         Eigen::JacobiSVD<matrix_t> svd(sphereJacobian);
         double conditionNumber = svd.singularValues()(0) / 
                                svd.singularValues()(svd.singularValues().size()-1);
         
-        if (conditionNumber > 1e6) {  // ÉèÖÃÒ»¸öºÏÀíµÄãĞÖµ
+        if (conditionNumber > 1e6) {  // è®¾ç½®ä¸€ä¸ªåˆç†çš„é˜ˆå€¼
             throw std::runtime_error("Jacobian poorly conditioned: " + std::to_string(conditionNumber));
         }
     }
@@ -239,7 +189,7 @@ VectorFunctionQuadraticApproximation ObstacleAvoidanceConstraint::getQuadraticAp
     constraint.dfdu = std::move(linearApprox.dfdu);
 
     const auto inputDim_ = 7;
-    // TODO: ¶ş½×µ¼ÊıÉèÖÃÎª0
+    // TODO: äºŒé˜¶å¯¼æ•°è®¾ç½®ä¸º0
     constraint.dfdxx.assign(constraint.f.size(), matrix_t::Zero(state.size(), state.size()));
     constraint.dfdux.assign(constraint.f.size(), matrix_t::Zero(inputDim_, state.size()));
     constraint.dfduu.assign(constraint.f.size(), matrix_t::Zero(inputDim_, inputDim_));
