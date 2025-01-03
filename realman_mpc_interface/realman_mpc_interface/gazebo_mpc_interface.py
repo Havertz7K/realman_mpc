@@ -10,38 +10,10 @@ from sensor_msgs.msg import JointState
 from rclpy.clock import Clock 
 import threading
 import numpy as np
-from .utils import generate_traj
+from .utils import generate_traj, interpolate_trajectory, find_nearest_timestamp_index
 
 import bisect
 from typing import List
-
-def find_nearest_timestamp_index(timestamps: List[int], current_time: int) -> int:
-    """
-    Find the index of the timestamp in the list that is closest to the given current time.
-    
-    Args:
-        timestamps (List[int]): A list of timestamps in increasing order.
-        current_time (int): The current time for which the nearest timestamp is to be found.
-        
-    Returns:
-        int: The index of the timestamp in the list that is closest to the current time.
-    """
-    # Use bisect_left to find the index of the first timestamp greater than or equal to current_time
-    insertion_point = bisect.bisect_left(timestamps, current_time)
-    
-    # If the insertion point is 0, return 0 as there are no timestamps smaller than current_time
-    if insertion_point == 0:
-        return 0
-    
-    # If the insertion point is len(timestamps), return len(timestamps) - 1 as there are no timestamps greater than current_time
-    if insertion_point == len(timestamps):
-        return len(timestamps) - 1
-    
-    # Otherwise, check which timestamp is closer to current_time and return the corresponding index
-    if current_time - timestamps[insertion_point - 1] < timestamps[insertion_point] - current_time:
-        return insertion_point - 1
-    else:
-        return insertion_point
 
 
 def send_mpc_reset_request(arm_name):
@@ -113,17 +85,17 @@ class GazeboMpcInterface(Node):
     def init_tf(self):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
-        self.source_frame = 'odom'  # 源坐标系
+        self.source_frame = 'world'  # 
         self.target_frame = 'gripper_tip_link'
-        self.tf_timer = self.create_timer(0.01, self.get_end_effect_transform)  # 每 0.01 秒执行一次 get_transform 函数
+        self.tf_timer = self.create_timer(0.01, self.get_end_effect_transform)  # 
     
     def get_end_effect_transform(self):
         try:
-            # 如果没有找到任何可用的坐标系,则退出
+            # 
             if self.target_frame is None:
                 self.get_logger().error("No valid target frame found.")
                 return
-            # 获取 source_frame 到 target_frame 的变换
+            # 
             transform:TransformStamped = self.tf_buffer.lookup_transform(
                 self.source_frame,
                 self.target_frame,
@@ -177,7 +149,7 @@ class GazeboMpcInterface(Node):
         with self.mpc_observation_lock:
             self.mpc_observation.time = self.get_elapsed_time()
 
-            # joint_state里面的数据不一定按照顺序的
+            
             if 'joint7' in msg.name:
                 joint_names = ['joint1', 'joint2', 'joint3',
                             'joint4', 'joint5', 'joint6', 'joint7']
@@ -194,8 +166,14 @@ class GazeboMpcInterface(Node):
 
         current_time = self.get_elapsed_time()
         if len(self.mpc_policy.input_trajectory) > 0:
-            index = find_nearest_timestamp_index(self.mpc_policy.time_trajectory, current_time)
-            current_input = self.mpc_policy.input_trajectory[index].value
+            # index = find_nearest_timestamp_index(self.mpc_policy.time_trajectory, current_time)
+            # current_input = self.mpc_policy.input_trajectory[index].value
+            # 
+            current_input = interpolate_trajectory(
+                self.mpc_policy.time_trajectory,
+                [input.value for input in self.mpc_policy.input_trajectory],
+                current_time
+            )
             # self.get_logger().info(f'### current time is {current_time}, publish velocity command {current_input}')
             
             velocity_command = Float64MultiArray()

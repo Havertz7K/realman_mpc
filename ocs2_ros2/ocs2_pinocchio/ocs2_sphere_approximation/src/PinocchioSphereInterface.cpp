@@ -148,6 +148,10 @@ void PinocchioSphereInterface::buildGeomFromPinocchioInterface(const PinocchioIn
 /******************************************************************************************************/
 auto PinocchioSphereInterface::computeSphereCentersInWorldFrame(const PinocchioInterface& pinocchioInterface) const
     -> std::vector<vector3_t> {
+  
+  //buildGeomFromPinocchioInterface(pinocchioInterface, *geometryModelPtr_);
+  
+
   pinocchio::GeometryData geometryData(*geometryModelPtr_);
 
   pinocchio::updateGeometryPlacements(pinocchioInterface.getModel(), pinocchioInterface.getData(), *geometryModelPtr_, geometryData);

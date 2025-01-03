@@ -19,6 +19,20 @@
           "ignoreFailures": true
         }
       ]
-    }
+    },
+    {
+      "name": "ROS: Launch",
+      "type": "ros",
+      "request": "launch",
+      "target": "${workspaceFolder}/ocs2_ros2/ocs2_robotic_examples/ocs2_mobile_manipulator_ros/launch/manipulator_realman_mpc.launch.py",
+      "env": {
+          "ROS_DOMAIN_ID": "0" //这里可以修改为自己的ROS_DOMAIN_ID
+      },
+      // 添加启动参数
+      "args": [
+          "rviz:=false",
+      ]
+  }
   ]
+
 }

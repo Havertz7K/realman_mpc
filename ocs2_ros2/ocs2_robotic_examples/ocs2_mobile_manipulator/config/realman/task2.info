@@ -30,7 +30,7 @@ ddp
   nThreads                        4
   threadPriority                  50
 
-  maxNumIterations                5
+  maxNumIterations                1
   minRelCost                      0.1
   constraintTolerance             1e-3
 
@@ -77,14 +77,14 @@ rollout
 ; MPC settings
 mpc
 {
-  timeHorizon                     1.0   ; [s]
+  timeHorizon                     2.0   ; [s]
   solutionTimeWindow              0.2   ; [s]
   coldStart                       false
   
   debugPrint                      true
 
   mpcDesiredFrequency             100   ; [Hz]
-  mrtDesiredFrequency             100   ; [Hz]
+  mrtDesiredFrequency             400   ; [Hz]
 }
 
 ; initial state
@@ -128,14 +128,14 @@ inputCost
 endEffector
 {
   ; end effector quadratic penalty scaling
-  muPosition      50.0
-  muOrientation   25.0
+  muPosition      55.0
+  muOrientation   30.0
 }
 
 finalEndEffector
 {
-  muPosition      50.0
-  muOrientation   25.0
+  muPosition      55.0
+  muOrientation   30.0
 }
 
 obstacleAvoidance
@@ -144,20 +144,20 @@ obstacleAvoidance
   activate  true
 
   ; relaxed log barrier mu
-  mu      1
+  mu      1e-2
 
   ; relaxed log barrier delta
-  delta    1e-2
+  delta     1e-3
 
   ; obstacle avoidance weight
-  weight   10.0
+  weight    1.0
 
 }
 
 selfCollision
 { 
   ; activate self-collision constraint
-  activate  true
+  activate  false
 
   ; Self Collision raw object pairs
   collisionObjectPairs
@@ -167,17 +167,6 @@ selfCollision
   ; Self Collision pairs
   collisionLinkPairs
   {
-    (0,0)  "Link1, Link3"
-    (1,0)  "Link1, Link5"
-    (2,0)  "Link1, Link7"
-    (3,0)  "Link2, Link4"
-    (4,0)  "Link2, Link6"
-    (5,0)  "Link2, Link7"
-    (6,0)  "Link3, Link5"
-    (7,0)  "Link3, Link7"
-    (8,0)  "Link4, Link6"
-    (9,0)  "Link4, Link7"
-    (10,0) "Link5, Link7"
   }
 
   ; minimum distance allowed between the pairs
@@ -187,7 +176,7 @@ selfCollision
   mu      1e-2
 
   ; relaxed log barrier delta
-  delta   1e-3
+  delta     1e-3
 }
 
 SphereApproximation
@@ -205,7 +194,6 @@ SphereApproximation
     [4] "Link5"
     [5] "Link6"
     [6] "Link7"
-
   }
 
   ;maximum allowed distances between the surfaces of the collision primitives and collision spheres
@@ -242,10 +230,10 @@ jointPositionLimits
 jointVelocityLimits
 {
   ; relaxed log barrier mu
-  mu      1e-10
+  mu      5e-5
 
   ; relaxed log barrier delta
-  delta   1e-10
+  delta   1e-4
   
   lowerBound
   {
@@ -277,4 +265,3 @@ jointVelocityLimits
     }
   }
 }
-

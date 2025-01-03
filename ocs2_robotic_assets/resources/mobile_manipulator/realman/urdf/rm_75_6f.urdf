@@ -172,8 +172,8 @@
     <axis
       xyz="0 1 0" />
     <limit
-      lower="-0.268"
-      upper="0.268"
+      lower="-2.269"
+      upper="2.269"
       effort="60"
       velocity="3.14" />
     <!-- <limit
@@ -494,8 +494,8 @@
     <parent link="Link7"/>
     <child link="realman_tip"/>
   </joint>
-
-  <link
+</robot>
+  <!-- <link
     name="camera_connect">
     <inertial>
       <origin
@@ -800,5 +800,5 @@
       link="gripper_Link3" />
     <child
       link="gripper_Link4" />
-  </joint>
+  </joint> -->
 </robot>

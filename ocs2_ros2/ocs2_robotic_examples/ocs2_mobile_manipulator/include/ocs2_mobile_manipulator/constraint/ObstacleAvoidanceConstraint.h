@@ -65,6 +65,14 @@ class ObstacleAvoidanceConstraint : public StateConstraint{
 
     std::unique_ptr<PinocchioStateInputMapping<scalar_t>> mappingPtr_;
 
+    // mutable std::mutex cache_mutex_;
+    // mutable scalar_t cached_time_{-1.0};
+    // mutable vector_t cached_state_;
+    // mutable vector_t cached_constraint_value_;
+    // mutable std::vector<Eigen::Vector3d> cached_gradients_;
+
+    // bool isCacheValid(scalar_t time, const vector_t& state) const;
+
 };
     
     }

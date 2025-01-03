@@ -875,21 +875,21 @@ bool GaussNewtonDDP::initializePrimalSolution() {
 void GaussNewtonDDP::initializeDualSolutionAndMetrics() {
   // adjust dual solution
   totalDualSolutionTimer_.startTimer();\
-  std::cout << "1111" << std::endl;
+  //std::cout << "1111" << std::endl;
   if (!optimizedDualSolution_.timeTrajectory.empty()) {
     const auto status =
         trajectorySpread(optimizedPrimalSolution_.modeSchedule_, nominalPrimalData_.primalSolution.modeSchedule_, optimizedDualSolution_);
   }
-  std::cout << "2222" << std::endl;
+  //std::cout << "2222" << std::endl;
   // initialize dual solution
   ocs2::initializeDualSolution(optimalControlProblemStock_[0], nominalPrimalData_.primalSolution, optimizedDualSolution_,
                                nominalDualData_.dualSolution);
-  std::cout << "3333" << std::endl;
+  //std::cout << "3333" << std::endl;
   totalDualSolutionTimer_.endTimer();
-  std::cout << "4444" << std::endl;
+  //std::cout << "4444" << std::endl;
   computeRolloutMetrics(optimalControlProblemStock_[0], nominalPrimalData_.primalSolution, nominalDualData_.dualSolution,
                         nominalPrimalData_.problemMetrics);
-  std::cout << "5555" << std::endl;
+  //std::cout << "5555" << std::endl;
   // update dual
   //  totalDualSolutionTimer_.startTimer();
   //  ocs2::updateDualSolution(optimalControlProblemStock_[0], nominalPrimalData_.primalSolution, nominalPrimalData_.problemMetrics,
@@ -898,9 +898,9 @@ void GaussNewtonDDP::initializeDualSolutionAndMetrics() {
 
   // calculates rollout merit
   performanceIndex_ = computeRolloutPerformanceIndex(nominalPrimalData_.primalSolution.timeTrajectory_, nominalPrimalData_.problemMetrics);
-  std::cout << "6666" << std::endl;
+  //std::cout << "6666" << std::endl;
   performanceIndex_.merit = calculateRolloutMerit(performanceIndex_);
-  std::cout << "7777" << std::endl;
+  //std::cout << "7777" << std::endl;
 }
 
 /******************************************************************************************************/
@@ -1020,7 +1020,7 @@ void GaussNewtonDDP::runImpl(scalar_t initTime, const vector_t& initState, scala
   initializationTimer_.startTimer();
   bool initialSolutionExists = initializePrimalSolution();  // true if the rollout is not purely from the Initializer
   initializeDualSolutionAndMetrics();
-  std::cout << "initialSolutionExists2222: " << initialSolutionExists << std::endl;
+  std::cout << "initialSolutionExists: " << initialSolutionExists << std::endl;
   performanceIndexHistory_.push_back(performanceIndex_);
   initializationTimer_.endTimer();
 

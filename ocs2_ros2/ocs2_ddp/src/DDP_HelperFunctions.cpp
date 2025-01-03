@@ -69,22 +69,33 @@ void computeRolloutMetrics(OptimalControlProblem& problem, const PrimalSolution&
   const auto& postEventIndices = primalSolution.postEventIndices_;
 
   problemMetrics.clear();
+  //std::cout << "44441"<< std::endl;
   problemMetrics.preJumps.reserve(postEventIndices.size());
+  //std::cout << "44442"<< std::endl;
   problemMetrics.intermediates.reserve(tTrajectory.size());
+  //std::cout << "44443"<< std::endl;
 
   auto nextPostEventIndexItr = postEventIndices.begin();
   constexpr auto request = Request::Cost + Request::Constraint + Request::SoftConstraint;
+  //std::cout << "44444"<< std::endl;
+
+  //std::cout << "tTrajectory.size(): "<< tTrajectory.size()<< std::endl;
   for (size_t k = 0; k < tTrajectory.size(); k++) {
+    //std::cout << "44445"<< std::endl;
     // intermediate time cost and constraints
     problem.preComputationPtr->request(request, tTrajectory[k], xTrajectory[k], uTrajectory[k]);
+    //std::cout << "44446"<< std::endl;
     problemMetrics.intermediates.push_back(
         computeIntermediateMetrics(problem, tTrajectory[k], xTrajectory[k], uTrajectory[k], dualSolution.intermediates[k]));
-
+    //std::cout << "44447"<< std::endl;
     // event time cost and constraints
+    
     if (nextPostEventIndexItr != postEventIndices.end() && k + 1 == *nextPostEventIndexItr) {
       const auto m = dualSolution.preJumps[std::distance(postEventIndices.begin(), nextPostEventIndexItr)];
       problem.preComputationPtr->requestPreJump(request, tTrajectory[k], xTrajectory[k]);
+      //std::cout << "44448"<< std::endl;
       problemMetrics.preJumps.push_back(computePreJumpMetrics(problem, tTrajectory[k], xTrajectory[k], m));
+      //std::cout << "44449"<< std::endl;
       nextPostEventIndexItr++;
     }
   }
